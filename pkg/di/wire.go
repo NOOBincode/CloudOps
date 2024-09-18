@@ -4,8 +4,15 @@ package di
 
 import (
 	authHandler "github.com/GoSimplicity/CloudOps/internal/auth/api"
-	authDAO "github.com/GoSimplicity/CloudOps/internal/auth/dao"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
+	authDAO "github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
 	authService "github.com/GoSimplicity/CloudOps/internal/auth/service"
+	treeHandler "github.com/GoSimplicity/CloudOps/internal/tree/api"
+	ecsDao "github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
+	elbDao "github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
+	nodeDao "github.com/GoSimplicity/CloudOps/internal/tree/dao/node"
+	rdsDao "github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
+	treeService "github.com/GoSimplicity/CloudOps/internal/tree/service"
 	userHandler "github.com/GoSimplicity/CloudOps/internal/user/api"
 	userDAO "github.com/GoSimplicity/CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/CloudOps/internal/user/service"
@@ -23,12 +30,20 @@ func InitWebServer() *gin.Engine {
 		InitLogger,
 		InitRedis,
 		InitDB,
+		InitCasbin,
 		userDAO.NewUserDAO,
 		userService.NewUserService,
 		userHandler.NewUserHandler,
-		authDAO.NewAuthDAO,
+		auth.NewAuthDAO,
+		authDAO.NewCasbinDAO,
 		authService.NewAuthService,
 		authHandler.NewAuthHandler,
+		ecsDao.NewTreeEcsDAO,
+		rdsDao.NewTreeRdsDAO,
+		elbDao.NewTreeElbDAO,
+		nodeDao.NewTreeNodeDAO,
+		treeService.NewTreeService,
+		treeHandler.NewTreeHandler,
 	)
 	return gin.Default()
 }

@@ -8,8 +8,15 @@ package di
 
 import (
 	api2 "github.com/GoSimplicity/CloudOps/internal/auth/api"
-	dao2 "github.com/GoSimplicity/CloudOps/internal/auth/dao"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
 	service2 "github.com/GoSimplicity/CloudOps/internal/auth/service"
+	api3 "github.com/GoSimplicity/CloudOps/internal/tree/api"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/node"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
+	service3 "github.com/GoSimplicity/CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/CloudOps/internal/user/api"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
@@ -27,14 +34,22 @@ func InitWebServer() *gin.Engine {
 	cmdable := InitRedis()
 	handler := jwt.NewJWTHandler(cmdable)
 	logger := InitLogger()
-	v := InitMiddlewares(handler, logger)
 	db := InitDB()
 	userDAO := dao.NewUserDAO(db, logger)
+	enforcer := InitCasbin(db, logger)
+	casbinDAO := casbin.NewCasbinDAO(enforcer, logger)
+	v := InitMiddlewares(handler, logger, userDAO, casbinDAO)
 	userService := service.NewUserService(userDAO)
 	userHandler := api.NewUserHandler(userService, logger, handler)
-	authDAO := dao2.NewAuthDAO(db, logger)
+	authDAO := auth.NewAuthDAO(db, logger)
 	authService := service2.NewAuthService(authDAO, logger, userDAO)
-	authHandler := api2.NewAuthHandler(authService, handler)
-	engine := InitGinServer(v, userHandler, authHandler)
+	authHandler := api2.NewAuthHandler(authService, handler, logger, casbinDAO, userDAO)
+	treeEcsDAO := ecs.NewTreeEcsDAO(db, logger)
+	treeElbDAO := elb.NewTreeElbDAO(db, logger)
+	treeRdsDAO := rds.NewTreeRdsDAO(db, logger)
+	treeNodeDAO := node.NewTreeNodeDAO(db, logger)
+	treeService := service3.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger)
+	treeHandler := api3.NewTreeHandler(treeService, logger)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler)
 	return engine
 }
