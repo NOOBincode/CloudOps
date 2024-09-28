@@ -173,12 +173,25 @@ func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 	return nil
 }
 
-func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
+func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) (err error) {
 	//已经在dao层实现回滚机制
-	if err := k.dao.UpdateCluster(ctx, id, cluster); err != nil {
+	originalCluster, err := k.dao.GetClusterByID(ctx, id)
+	if err != nil {
+		k.l.Error("UpdateCluster: 获取集群副本失败", zap.Error(err))
+		return fmt.Errorf("获取集群副本失败: %w", err)
+	}
+	if err = k.dao.UpdateCluster(ctx, id, cluster); err != nil {
 		k.l.Error("UpdateCluster 更新集群失败", zap.Error(err))
 		return fmt.Errorf("更新集群失败: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			k.l.Info("UpdateCluster: 回滚集群记录", zap.Int("clusterID", id))
+			if rollbackErr := k.dao.CreateCluster(ctx, originalCluster); rollbackErr != nil {
+				k.l.Error("UpdateCluster 更新集群失败", zap.Int("clusterID", id))
+			}
+		}
+	}()
 	//初始化或更新 kubernetes 客户端
 	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
 	if err != nil {
@@ -261,7 +274,11 @@ func (k *k8sService) BatchDeleteClusters(ctx context.Context, ids []int) error {
 }
 
 func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
-	panic("implement me")
+	Cluster, err := k.dao.GetClusterByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群信息失败: %w", err)
+	}
+	return Cluster, nil
 }
 
 func (k *k8sService) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {

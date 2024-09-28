@@ -77,19 +77,9 @@ func (k *k8sDAO) DeleteCluster(ctx context.Context, id int) error {
 }
 
 func (k *k8sDAO) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
-	tx := k.db.WithContext(ctx).Begin()
-
-	defer func() {
-		if err := recover(); err != nil {
-			k.l.Error("UpdateCluster 更新集群失败,触发回滚", zap.Int("id", id))
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	if err := tx.Where("id = ?", id).Updates(&cluster).Error; err != nil {
-		panic(err)
+	if err := k.db.WithContext(ctx).Where("id = ?", id).Updates(&cluster).Error; err != nil {
+		k.l.Error("UpdateCluster 更新集群失败", zap.Error(err))
+		return err
 	}
 	return nil
 }

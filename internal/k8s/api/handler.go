@@ -222,11 +222,28 @@ func (k *K8sHandler) CreateCluster(ctx *gin.Context) {
 
 // UpdateCluster 更新指定 ID 的集群
 func (k *K8sHandler) UpdateCluster(ctx *gin.Context) {
-	// TODO: 实现更新集群的逻辑
+	var cluster *model.K8sCluster
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	err := ctx.ShouldBind(&cluster)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	cluster.UserID = uc.Uid
+	err = k.service.UpdateCluster(ctx, cluster.ID, cluster)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+	apiresponse.Success(ctx)
+
 }
 
 // DeleteCluster 删除指定 ID 的集群
 func (k *K8sHandler) DeleteCluster(ctx *gin.Context) {
+
 	// TODO: 实现删除集群的逻辑
 }
 
