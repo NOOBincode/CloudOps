@@ -188,7 +188,7 @@ func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K
 		if err != nil {
 			k.l.Info("UpdateCluster: 回滚集群记录", zap.Int("clusterID", id))
 			if rollbackErr := k.dao.CreateCluster(ctx, originalCluster); rollbackErr != nil {
-				k.l.Error("UpdateCluster 更新集群失败", zap.Int("clusterID", id))
+				k.l.Error("UpdateCluster 回滚集群失败", zap.Int("clusterID", id))
 			}
 		}
 	}()
