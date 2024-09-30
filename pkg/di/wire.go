@@ -15,6 +15,10 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
+	promDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
+	promService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	ecsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	elbDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
@@ -40,16 +44,19 @@ func InitWebServer() *Cmd {
 		InitCasbin,
 		InitAndRefreshK8sClient,
 		client.NewK8sClient,
+		cache.NewMonitorCache,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
 		treeHandler.NewTreeHandler,
 		k8sHandler.NewK8sHandler,
+		promHandler.NewPrometheusHandler,
 		userService.NewUserService,
 		treeService.NewTreeService,
 		apiService.NewApiService,
 		roleService.NewRoleService,
 		menuService.NewMenuService,
 		k8sService.NewK8sService,
+		promService.NewPrometheusService,
 		userDao.NewUserDAO,
 		apiDao.NewApiDAO,
 		roleDao.NewRoleDAO,
@@ -60,6 +67,7 @@ func InitWebServer() *Cmd {
 		elbDao.NewTreeElbDAO,
 		k8sDao.NewK8sDAO,
 		nodeDao.NewTreeNodeDAO,
+		promDao.NewPrometheusDAO,
 		wire.Struct(new(Cmd), "*"),
 	)
 	return new(Cmd)
