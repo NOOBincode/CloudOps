@@ -3,22 +3,24 @@
 package di
 
 import (
-	authHandler "github.com/GoSimplicity/AI-CloudOps/internal/auth/api"
-	apiDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/api"
-	authDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
-	menuDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/menu"
-	roleDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/role"
-	apiService "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
-	menuService "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
-	roleService "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
+	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	promDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
 	promService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service"
+	authHandler "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
+	apiDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/api"
+	authDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/casbin"
+	menuDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/menu"
+	roleDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/role"
+	apiService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/api"
+	menuService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/menu"
+	roleService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/role"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	ecsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	elbDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
@@ -47,6 +49,7 @@ func InitWebServer() *Cmd {
 		cache.NewMonitorCache,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
+		notAuthHandler.NewNotAuthHandler,
 		treeHandler.NewTreeHandler,
 		k8sHandler.NewK8sHandler,
 		promHandler.NewPrometheusHandler,
@@ -57,6 +60,7 @@ func InitWebServer() *Cmd {
 		menuService.NewMenuService,
 		k8sService.NewK8sService,
 		promService.NewPrometheusService,
+		notAuthService.NewNotAuthService,
 		userDao.NewUserDAO,
 		apiDao.NewApiDAO,
 		roleDao.NewRoleDAO,

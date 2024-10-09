@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
@@ -24,6 +26,7 @@ func NewK8sHandler(service service.K8sService, l *zap.Logger) *K8sHandler {
 
 // RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
+	// TODO delete hello, avoid validate for test
 	k8sGroup := server.Group("/api/k8s")
 
 	// 集群相关路由
@@ -39,17 +42,17 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	// 节点相关路由
 	nodes := k8sGroup.Group("/nodes")
 	{
-		nodes.GET("/", k.GetNodeList)                   // 获取节点列表
-		nodes.GET("/:name", k.GetNodeDetail)            // 获取指定名称的节点详情
-		nodes.GET("/:name/pods", k.GetPodsListByNodeId) // 获取指定节点上的 Pods 列表
+		nodes.GET("/", k.GetNodeList)                     // 获取节点列表
+		nodes.GET("/:name", k.GetNodeDetail)              // 获取指定名称的节点详情
+		nodes.GET("/:name/pods", k.GetPodsListByNodeName) // 获取指定节点上的 Pods 列表
 
 		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
 		nodes.POST("/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
 		nodes.POST("/labels/add", k.AddLabelNodes)                // 为节点添加标签
-		nodes.DELETE("/labels/delete", k.DeleteLabelNodes)
-		nodes.POST("/taints/add", k.AddTaintsNodes) // 为节点添加 Taint
-		nodes.DELETE("/taints/delete", k.DeleteTaintsNodes)
-		nodes.POST("/drain", k.DrainPods) // 清空节点上的 Pods
+		nodes.DELETE("/labels/delete", k.DeleteLabelNodes)        // 删除节点标签
+		nodes.POST("/taints/add", k.AddTaintsNodes)               // 为节点添加 Taint
+		nodes.DELETE("/taints/delete", k.DeleteTaintsNodes)       // 删除节点 Taint
+		nodes.POST("/drain", k.DrainPods)                         // 清空节点上的 Pods
 	}
 
 	// YAML 模板相关路由
@@ -86,9 +89,9 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 		pods.GET("/:podName/containers/:container/logs", k.GetContainerLogs) // 获取指定容器的日志
 		pods.GET("/:podName/yaml", k.GetPodYaml)                             // 获取指定 Pod 的 YAML 配置
 
-		pods.POST("/", k.CreatePod)           // 创建新的 Pod
-		pods.PUT("/:podName", k.UpdatePod)    // 更新指定名称的 Pod
-		pods.DELETE("/:podName", k.DeletePod) // 删除指定名称的 Pod
+		pods.POST("/", k.CreatePod)   // 创建新的 Pod
+		pods.PUT("/", k.UpdatePod)    // 更新指定名称的 Pod
+		pods.DELETE("/", k.DeletePod) // 删除指定名称的 Pod
 	}
 
 	// Deployment 相关路由
@@ -249,9 +252,21 @@ func (k *K8sHandler) DeleteCluster(ctx *gin.Context) {
 
 // GetNodeList 获取节点列表
 func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
-	nodes, err := k.service.ListAllNodes(ctx)
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	nodes, err := k.service.ListAllNodes(ctx, clusterID)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
@@ -260,31 +275,130 @@ func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
 
 // GetNodeDetail 获取指定名称的节点详情
 func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
-	// TODO: 实现获取节点详情的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Param("name")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	node, err := k.service.GetNodeByName(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 // GetPodsListByNodeId 获取指定节点上的 Pods 列表
-func (k *K8sHandler) GetPodsListByNodeId(ctx *gin.Context) {
-	// TODO: 实现获取指定节点上的 Pods 列表的逻辑
+func (k *K8sHandler) GetPodsListByNodeName(ctx *gin.Context) {
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Param("name")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	node, err := k.service.GetPodsByNodeName(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 // TaintYamlCheck 检查节点 Taint 的 YAML 配置
 func (k *K8sHandler) TaintYamlCheck(ctx *gin.Context) {
-	// TODO: 实现检查节点 Taint 的 YAML 配置的逻辑
+	var req model.TaintK8sNodesRequest
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.CheckTaintYaml(ctx, &req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "Taint YAML 配置检查失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // ScheduleEnableSwitchNodes 启用或切换节点调度
 func (k *K8sHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
-	// TODO: 实现启用或切换节点调度的逻辑
+	var req model.ScheduleK8sNodesRequest
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.BatchEnableSwitchNodes(ctx, &req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "启用或切换节点调度失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // AddLabelNodes 为节点添加标签
 func (k *K8sHandler) AddLabelNodes(ctx *gin.Context) {
-	// TODO: 实现为节点添加标签的逻辑
+	var label *model.LabelK8sNodesRequest
+
+	err := ctx.ShouldBind(&label)
+	if err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.UpdateNodeLabel(ctx, label); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
+// DeleteLabelNodes 删除节点标签
 func (k *K8sHandler) DeleteLabelNodes(ctx *gin.Context) {
-	// TODO: 实现删除节点标签的逻辑
+	var label *model.LabelK8sNodesRequest
+
+	err := ctx.ShouldBind(&label)
+	if err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.UpdateNodeLabel(ctx, label); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // AddTaintsNodes 为节点添加 Taint
@@ -293,23 +407,52 @@ func (k *K8sHandler) AddTaintsNodes(ctx *gin.Context) {
 
 	err := ctx.ShouldBind(&taint)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
-	if err := k.service.AddNodeTaint(ctx, taint); err != nil {
+	if err := k.service.UpdateNodeTaint(ctx, taint); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
+
+	apiresponse.Success(ctx)
 }
 
+// DeleteTaintsNodes 删除节点 Taint
 func (k *K8sHandler) DeleteTaintsNodes(ctx *gin.Context) {
-	// TODO: 实现删除节点 Taint 的逻辑
+	var taint *model.TaintK8sNodesRequest
+
+	err := ctx.ShouldBind(&taint)
+	if err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.UpdateNodeTaint(ctx, taint); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DrainPods 清空节点上的 Pods
 func (k *K8sHandler) DrainPods(ctx *gin.Context) {
-	// TODO: 实现清空节点上的 Pods 的逻辑
+	var req model.K8sClusterNodesRequest
+
+	err := ctx.ShouldBind(&req)
+	if err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.DrainPods(ctx, &req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetYamlTemplateList 获取 YAML 模板列表
@@ -359,47 +502,225 @@ func (k *K8sHandler) DeleteYamlTask(ctx *gin.Context) {
 
 // GetClusterNamespacesForCascade 获取级联选择的命名空间列表
 func (k *K8sHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
-	// TODO: 实现获取级联选择的命名空间列表的逻辑
+	namespaces, err := k.service.GetClusterNamespacesList(ctx)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, namespaces)
 }
 
 // GetClusterNamespacesForSelect 获取用于选择的命名空间列表
 func (k *K8sHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的命名空间列表的逻辑
+	name := ctx.Query("name")
+
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	namespaces, err := k.service.GetClusterNamespacesByName(ctx, name)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, namespaces)
 }
 
 // GetPodListByNamespace 根据命名空间获取 Pods 列表
-func (k *K8sHandler) GetPodListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取 Pods 列表的逻辑
+func (k *K8sHandler) GetPodListByNamespace(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(idStr)
+	if err != nil {
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		return
+	}
+
+	// 可选参数：按 Pod 名称过滤
+	podName := c.Query("podName") // 例如，?podName=my-pod
+
+	pods, err := k.service.GetPodsByNamespace(c.Request.Context(), clusterID, namespace, podName)
+	if err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(c, pods)
 }
 
 // GetPodContainers 获取 Pod 的容器列表
-func (k *K8sHandler) GetPodContainers(ctx *gin.Context) {
-	// TODO: 实现获取 Pod 的容器列表的逻辑
+func (k *K8sHandler) GetPodContainers(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(idStr)
+	if err != nil {
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		return
+	}
+
+	podName := c.Param("podName")
+	if podName == "" {
+		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
+		return
+	}
+
+	containers, err := k.service.GetContainersByPod(c.Request.Context(), clusterID, namespace, podName)
+	if err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(c, containers)
 }
 
 // GetContainerLogs 获取容器日志
-func (k *K8sHandler) GetContainerLogs(ctx *gin.Context) {
-	// TODO: 实现获取容器日志的逻辑
+func (k *K8sHandler) GetContainerLogs(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(idStr)
+	if err != nil {
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		return
+	}
+
+	podName := c.Param("podName")
+	if podName == "" {
+		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
+		return
+	}
+
+	containerName := c.Param("container")
+	if containerName == "" {
+		apiresponse.BadRequestError(c, "缺少 'container' 参数")
+		return
+	}
+
+	logs, err := k.service.GetContainerLogs(c.Request.Context(), clusterID, namespace, podName, containerName)
+	if err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(c, logs)
 }
 
 // GetPodYaml 获取 Pod 的 YAML 配置
-func (k *K8sHandler) GetPodYaml(ctx *gin.Context) {
-	// TODO: 实现获取 Pod 的 YAML 配置的逻辑
+func (k *K8sHandler) GetPodYaml(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(idStr)
+	if err != nil {
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		return
+	}
+
+	podName := c.Param("podName")
+	if podName == "" {
+		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
+		return
+	}
+
+	pod, err := k.service.GetPodYaml(c.Request.Context(), clusterID, namespace, podName)
+	if err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(c, pod)
 }
 
 // CreatePod 创建新的 Pod
-func (k *K8sHandler) CreatePod(ctx *gin.Context) {
-	// TODO: 实现创建 Pod 的逻辑
+func (k *K8sHandler) CreatePod(c *gin.Context) {
+	var req model.K8sPodRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(c, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.CreatePod(c.Request.Context(), &req); err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(c)
 }
 
 // UpdatePod 更新指定名称的 Pod
-func (k *K8sHandler) UpdatePod(ctx *gin.Context) {
-	// TODO: 实现更新 Pod 的逻辑
+func (k *K8sHandler) UpdatePod(c *gin.Context) {
+	var req model.K8sPodRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(c, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdatePod(c.Request.Context(), &req); err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(c)
 }
 
 // DeletePod 删除指定名称的 Pod
-func (k *K8sHandler) DeletePod(ctx *gin.Context) {
-	// TODO: 实现删除 Pod 的逻辑
+func (k *K8sHandler) DeletePod(c *gin.Context) {
+	var req model.K8sPodRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(c, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeletePod(c.Request.Context(), req.ClusterName, req.Pod.Namespace, req.Pod.Name); err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(c)
 }
 
 // GetDeployListByNamespace 根据命名空间获取部署列表

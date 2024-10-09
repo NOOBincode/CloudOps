@@ -7,6 +7,7 @@ import (
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"net/http"
 	"strconv"
 )
 
@@ -46,10 +47,10 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		// Prometheus 配置相关路由
 		prometheusConfigs := monitorGroup.Group("/prometheus_configs")
 		{
-			prometheusConfigs.GET("/prometheus", p.GetMonitorPrometheusYaml)              // 获取单个 Prometheus 配置文件
-			prometheusConfigs.GET("/prometheus_alert", p.GetMonitorPrometheusAlertYaml)   // 获取单个 Prometheus 告警配置文件
-			prometheusConfigs.GET("/prometheus_record", p.GetMonitorPrometheusRecordYaml) // 获取单个 Prometheus 记录配置文件
-			prometheusConfigs.GET("/alertManager", p.GetMonitorAlertManagerYaml)          // 获取单个 AlertManager 配置文件
+			prometheusConfigs.GET("/prometheus", p.GetMonitorPrometheusYaml)                // 获取单个 Prometheus 配置文件
+			prometheusConfigs.GET("/prometheus_alert", p.GetMonitorPrometheusAlertRuleYaml) // 获取单个 Prometheus 告警配置文件
+			prometheusConfigs.GET("/prometheus_record", p.GetMonitorPrometheusRecordYaml)   // 获取单个 Prometheus 记录配置文件
+			prometheusConfigs.GET("/alertManager", p.GetMonitorAlertManagerYaml)            // 获取单个 AlertManager 配置文件
 		}
 
 		// 值班组相关路由
@@ -172,7 +173,7 @@ func (p *PrometheusHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 
 // DeleteMonitorScrapePool 删除监控采集池
 func (p *PrometheusHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
-	id := ctx.Query("id")
+	id := ctx.Param("id")
 	atom, err := strconv.Atoi(id)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "参数错误")
@@ -256,57 +257,179 @@ func (p *PrometheusHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 
 // GetMonitorPrometheusYaml 获取单个 Prometheus 配置文件
 func (p *PrometheusHandler) GetMonitorPrometheusYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 Prometheus 配置文件的逻辑
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorPrometheusYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 配置文件失败")
+		return
+	}
+
+	ctx.String(http.StatusOK, yaml)
 }
 
-// GetMonitorPrometheusAlertYaml 获取单个 Prometheus 告警配置文件
-func (p *PrometheusHandler) GetMonitorPrometheusAlertYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 Prometheus 告警配置文件的逻辑
+// GetMonitorPrometheusAlertRuleYaml 获取单个 Prometheus 告警配置规则文件
+func (p *PrometheusHandler) GetMonitorPrometheusAlertRuleYaml(ctx *gin.Context) {
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorPrometheusAlertRuleYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 告警配置文件失败")
+		return
+	}
+
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorPrometheusRecordYaml 获取单个 Prometheus 记录配置文件
 func (p *PrometheusHandler) GetMonitorPrometheusRecordYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 Prometheus 记录配置文件的逻辑
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorPrometheusRecordYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 记录配置文件失败")
+		return
+	}
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorAlertManagerYaml 获取单个 AlertManager 配置文件
 func (p *PrometheusHandler) GetMonitorAlertManagerYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 AlertManager 配置文件的逻辑
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorAlertManagerYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 AlertManager 配置文件失败")
+		return
+	}
+
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorOnDutyGroupList 获取值班组列表
 func (p *PrometheusHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
-	// TODO: 实现获取值班组列表的逻辑
+	searchName := ctx.Query("name")
+
+	list, err := p.service.GetMonitorOnDutyGroupList(ctx, &searchName)
+	if err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "获取值班组列表失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorOnDutyGroup 创建新的值班组
 func (p *PrometheusHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
-	// TODO: 实现创建新的值班组的逻辑
+	var onDutyGroup *model.MonitorOnDutyGroup
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	if err := ctx.ShouldBind(&onDutyGroup); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	onDutyGroup.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorOnDutyGroup(ctx, onDutyGroup); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // CreateMonitorOnDutyGroupChange 创建值班组的换班记录
 func (p *PrometheusHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
-	// TODO: 实现创建值班组的换班记录的逻辑
+	var onDutyGroupChange *model.MonitorOnDutyChange
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	if err := ctx.ShouldBind(&onDutyGroupChange); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	onDutyGroupChange.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorOnDutyGroupChange(ctx, onDutyGroupChange); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateMonitorOnDutyGroup 更新值班组信息
 func (p *PrometheusHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
-	// TODO: 实现更新值班组信息的逻辑
+	var onDutyGroup *model.MonitorOnDutyGroup
+
+	if err := ctx.ShouldBind(&onDutyGroup); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.UpdateMonitorOnDutyGroup(ctx, onDutyGroup); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteMonitorOnDutyGroup 删除指定的值班组
 func (p *PrometheusHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
-	// TODO: 实现删除指定的值班组的逻辑
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.DeleteMonitorOnDutyGroup(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetMonitorOnDutyGroup 获取指定的值班组信息
 func (p *PrometheusHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
-	// TODO: 实现获取指定的值班组信息的逻辑
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	group, err := p.service.GetMonitorOnDutyGroup(ctx, intId)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, group)
 }
 
 // GetMonitorOnDutyGroupFuturePlan 获取指定值班组的未来值班计划
 func (p *PrometheusHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
-	// TODO: 实现获取指定值班组的未来值班计划的逻辑
+	startTime := ctx.DefaultQuery("startTime", "")
+	endTime := ctx.DefaultQuery("endTime", "")
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	plans, err := p.service.GetMonitorOnDutyGroupFuturePlan(ctx, intId, startTime, endTime)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, plans)
 }
 
 // GetMonitorAlertManagerPoolList 获取 AlertManager 集群池列表

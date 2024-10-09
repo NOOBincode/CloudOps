@@ -1,9 +1,10 @@
 package model
 
 import (
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	core "k8s.io/api/core/v1"
-	"time"
 )
 
 // K8sCluster Kubernetes 集群的配置
@@ -37,7 +38,6 @@ type K8sCluster struct {
 
 // K8sNode Kubernetes 节点
 type K8sNode struct {
-	Model
 	Name              string               `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:节点名称"` // 节点名称
 	ClusterID         int                  `json:"clusterId" gorm:"index;not null;comment:所属集群ID"`                                 // 所属集群ID
 	Status            string               `json:"status" gorm:"comment:节点状态，例如 Ready, NotReady, SchedulingDisabled"`              // 节点状态
@@ -314,15 +314,16 @@ type K8sResourceList struct {
 // LabelK8sNodesRequest 定义为节点添加标签的请求结构
 type LabelK8sNodesRequest struct {
 	*K8sClusterNodesRequest
-	Labels map[string]string `json:"labels" binding:"required,dive,required"` // 标签键值对，必填，格式为 key=value
+	ModType string            `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
+	Labels  map[string]string `json:"labels" binding:"required,dive,required"`   // 标签键值对，必填，格式为 key=value
 }
 
 // TaintK8sNodesRequest 定义为节点添加或删除 Taint 的请求结构
 type TaintK8sNodesRequest struct {
 	*K8sClusterNodesRequest
-	Taints    []Taint `json:"taints" binding:"required,dive,required"`   // Taint 列表，必填
-	ModType   string  `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
-	TaintYaml string  `json:"taint_yaml_string,omitempty"`               // 可选的 Taint YAML 字符串，用于验证或其他用途
+	// Taints    []Taint `json:"taints" binding:"required,dive,required"`   // Taint 列表，必填
+	ModType   string `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
+	TaintYaml string `json:"taint_yaml_string,omitempty"`               // 可选的 Taint YAML 字符串，用于验证或其他用途
 }
 
 // OneEvent 单个事件的模型
@@ -339,7 +340,19 @@ type OneEvent struct {
 
 // Taint 定义 Taint 的模型
 type Taint struct {
-	Key    string `json:"key" binding:"required"`    // Taint 的键
-	Value  string `json:"value" binding:"required"`  // Taint 的值
-	Effect string `json:"effect" binding:"required"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
+	Key    string `json:"key" binding:"required"`                                                // Taint 的键
+	Value  string `json:"value,omitempty"`                                                       // Taint 的值
+	Effect string `json:"effect" binding:"required,oneof=NoSchedule PreferNoSchedule NoExecute"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
+}
+
+// ScheduleK8sNodesRequest 定义调度节点的请求结构
+type ScheduleK8sNodesRequest struct {
+	*K8sClusterNodesRequest
+	ScheduleEnable bool `json:"schedule_enable"`
+}
+
+// K8sPodRequest 创建 Pod 的请求结构
+type K8sPodRequest struct {
+	ClusterName string    `json:"cluster_name" binding:"required"` // 集群名称，必填
+	Pod         *core.Pod `json:"pod" binding:"required"`          // Pod 对象，必填
 }

@@ -7,22 +7,24 @@
 package di
 
 import (
-	api4 "github.com/GoSimplicity/AI-CloudOps/internal/auth/api"
-	api2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/api"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/menu"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/role"
-	api3 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
-	menu2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
-	role2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	api8 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
+	service5 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	api7 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
 	service4 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service"
+	api4 "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
+	api2 "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/casbin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/role"
+	api3 "github.com/GoSimplicity/AI-CloudOps/internal/system/service/api"
+	menu2 "github.com/GoSimplicity/AI-CloudOps/internal/system/service/menu"
+	role2 "github.com/GoSimplicity/AI-CloudOps/internal/system/service/role"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
@@ -71,9 +73,11 @@ func InitWebServer() *Cmd {
 	k8sHandler := api6.NewK8sHandler(k8sService, logger)
 	prometheusDao := dao3.NewPrometheusDAO(db, logger)
 	monitorCache := cache.NewMonitorCache(logger, prometheusDao)
-	prometheusService := service4.NewPrometheusService(prometheusDao, monitorCache, logger)
+	prometheusService := service4.NewPrometheusService(prometheusDao, monitorCache, logger, userDAO)
 	prometheusHandler := api7.NewPrometheusHandler(prometheusService, logger)
-	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler, prometheusHandler)
+	notAuthService := service5.NewNotAuthService(logger, treeNodeDAO)
+	notAuthHandler := api8.NewNotAuthHandler(notAuthService)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler, prometheusHandler, notAuthHandler)
 	cron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache)
 	cmd := &Cmd{
 		Server: engine,
